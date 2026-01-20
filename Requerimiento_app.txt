@@ -1,0 +1,296 @@
+Requerimiento Python Server-Side — “Test inteligente / Evaluador de perfil” (tipo “Perfil de riesgo / Qué tipo de ahorrista sos”)
+1) Problema (1 frase)
+
+Construir un backend en Python que sirva tests dinámicos (preguntas + scoring), calcule un resultado (perfil), y registre analítica agregada mínima para monetización/viralidad con DB chica.
+
+2) Objetivo de producto
+
+Entregar una experiencia “rápida” (3–6 minutos) que genere un resultado compartible (social share) y permita optimización (qué test convierte mejor, qué preguntas abandonan).
+
+Minimizar costos: DB pequeña, escritura baja, lectura alta (cacheable), sin necesidad de guardar PII.
+
+3) Alcance MVP (server-side)
+3.1 Funcionalidades core
+
+Catálogo de tests (público)
+
+Listar tests disponibles con: título, descripción, duración estimada, tags (ahorro, riesgo, inversión), idioma, versión.
+
+Motor de sesión de test
+
+Iniciar test → entrega preguntas (ordenadas o adaptativas).
+
+Registrar respuestas.
+
+Calcular resultado (perfil) al finalizar.
+
+Scoring y reglas
+
+Soportar:
+
+Ponderación por opción (sumatoria por dimensiones).
+
+Reglas (si respuesta X entonces sumar Y o saltar pregunta).
+
+Resultados por umbrales (score ranges).
+
+Resultado shareable
+
+Generar un share_token o share_slug (sin datos sensibles) para una URL pública de resultado.
+
+Analítica agregada (DB chica)
+
+Contadores por test/versión:
+
+Inicios, completados, abandono por pregunta, distribución de perfiles, tiempo promedio, fuente/campaign.
+
+No guardar respuestas individuales salvo configuración explícita (default: NO).
+
+3.2 Panel Admin (mínimo)
+
+CRUD de tests, preguntas, opciones, reglas, resultados (perfiles).
+
+Activar/desactivar tests, versionado (publicar v1, v2).
+
+Dashboard simple: distribución de perfiles + funnel (start → finish) + top abandono.
+
+4) Requisitos no funcionales (NFR)
+
+Performance: p95 < 300ms para endpoints de lectura (catálogo/preguntas), p95 < 500ms para finalización/scoring.
+
+Escalabilidad: stateless; soportar 100–300 req/min en VM pequeña.
+
+Seguridad:
+
+Sin PII por defecto.
+
+Admin protegido (JWT o sesión + RBAC).
+
+Rate limit básico en endpoints de sesión (anti-bot).
+
+SEO (server-side relevante):
+
+Endpoint público de “resultado” con metadata (OpenGraph) para compartir.
+
+Observabilidad:
+
+Logs estructurados JSON, request_id, error tracking.
+
+Configurabilidad:
+
+Tests en DB + caché (Redis opcional) o caché in-memory + ETag.
+
+5) Arquitectura propuesta (server-side)
+5.1 Stack recomendado
+
+Framework API: FastAPI (ASGI) + Uvicorn/Gunicorn.
+
+DB: PostgreSQL (recomendado) o SQLite (MVP single instance).
+
+Migraciones: Alembic.
+
+ORM: SQLAlchemy 2.x.
+
+Cache: Redis opcional (recomendado si hay tráfico).
+
+Background jobs: opcional (RQ/Celery) solo si se genera imagen de resultado o reportes.
+
+5.2 Componentes
+
+Test Service: catálogo, versionado, publicación.
+
+Session Service: inicia sesión, entrega preguntas, valida progresión.
+
+Scoring Engine: calcula score por dimensiones y mapea a perfil.
+
+Analytics Aggregator: incrementa contadores (upserts) por evento.
+
+Admin API: CRUD y métricas.
+
+6) Modelo de datos (DB chica)
+6.1 Entidades principales
+
+tests
+
+id, slug, title, description, lang, is_active, published_version, created_at
+
+test_versions
+
+id, test_id, version (int), status (draft/published), config_json (opcional), created_at
+
+questions
+
+id, test_version_id, order, type (single/multi/scale), text, is_required, rules_json
+
+options
+
+id, question_id, text, value (string/int), score_json (por dimensiones), next_question_id (opcional)
+
+profiles (results)
+
+id, test_version_id, code (LOW/MED/HIGH), title, summary, recommendations_json, min_score, max_score
+
+sessions (mínimo indispensable)
+
+id (uuid), test_version_id, status (started/finished/expired), started_at, finished_at, source, campaign, user_agent_hash (opcional), ip_hash (opcional)
+
+session_answers (opcional por configuración, default OFF)
+
+Si se activa: guardar respuestas anonimizadas para mejorar el scoring.
+
+analytics_daily (agregado)
+
+date, test_version_id, starts, finishes, avg_time_sec, drop_q1..drop_qN (o tabla normalizada), profile_counts_json
+
+Nota DB chica: con analítica agregada, la tabla sessions puede purgarse/expirar (TTL 7–30 días) y mantener analytics_daily como histórico liviano.
+
+7) API Endpoints (contrato)
+7.1 Públicos
+
+GET /api/tests
+
+Lista tests activos (slug, título, descripción, idioma, duración estimada, versión publicada).
+
+GET /api/tests/{slug}
+
+Detalle del test + metadata para UI.
+
+POST /api/tests/{slug}/sessions
+
+Inicia sesión → { session_id, test_version, first_question }
+
+GET /api/sessions/{session_id}/question
+
+Devuelve pregunta actual (y opciones).
+
+Soporta ETag/cache si se usa flujo determinístico.
+
+POST /api/sessions/{session_id}/answer
+
+Body: { question_id, selected_option_ids, value }
+
+Respuesta: { next_question | result_ready }
+
+POST /api/sessions/{session_id}/finish
+
+Devuelve: { profile_code, title, summary, recommendations, share_url }
+
+GET /r/{share_token}
+
+Página/JSON público del resultado (sin datos sensibles), con OpenGraph.
+
+7.2 Admin (protegidos)
+
+POST /api/admin/login
+
+GET/POST/PUT/DELETE /api/admin/tests
+
+GET/POST/PUT/DELETE /api/admin/tests/{id}/versions
+
+GET/POST/PUT/DELETE /api/admin/questions
+
+GET /api/admin/analytics?test_version_id=&from=&to=
+
+8) Scoring Engine (reglas mínimas)
+8.1 Dimensiones sugeridas (perfil riesgo/ahorro)
+
+Horizonte (corto/medio/largo)
+
+Tolerancia a pérdida
+
+Estabilidad de ingresos
+
+Objetivo (ahorro, renta, crecimiento)
+
+Conocimiento/experiencia
+
+8.2 Reglas soportadas (MVP)
+
+Sumatoria por dimensión: cada opción aporta {dim: +n}.
+
+Normalización: mapear score total a 0–100.
+
+Umbrales → perfil:
+
+0–33 Conservador
+
+34–66 Moderado
+
+67–100 Agresivo
+
+Salto condicional (opcional): si respuesta implica “sin ingresos estables”, saltar preguntas avanzadas.
+
+9) Analítica y viralidad (medible)
+9.1 Eventos a registrar (agregados)
+
+test_start
+
+question_view (opcional si no infla writes; alternativa: inferir abandono por último answer)
+
+answer_submitted
+
+test_finish
+
+share_open (visitas a /r/{token})
+
+9.2 Métricas mínimas
+
+Conversion rate: finishes / starts
+
+Drop-off por pregunta
+
+Distribución de perfiles
+
+Tiempo promedio a finish
+
+Top sources/campaign
+
+10) Anti-bot / abuso (simple)
+
+Rate limit por IP hash: p.ej. 30 starts/hora, 120 answers/hora.
+
+Detección de completado “demasiado rápido” (ej. < 15s) → marcar como sospechoso y excluir de analítica.
+
+11) Contenido y versionado
+
+Todos los tests deben ser versionados; publicar una versión congela preguntas/scoring.
+
+Cambios futuros se hacen en draft v(n+1) sin romper sesiones en curso.
+
+12) Deployment
+
+Contenedor Docker:
+
+api (FastAPI)
+
+db (Postgres) o SQLite volume
+
+redis opcional
+
+Config por env vars:
+
+DATABASE_URL, JWT_SECRET, ADMIN_USER, ADMIN_PASS_HASH
+
+PUBLIC_BASE_URL (para share_url y OG tags)
+
+Reverse proxy: Nginx/Caddy con gzip + cache headers para endpoints públicos.
+
+13) Fuera de alcance (por ahora)
+
+Guardar perfiles por usuario logueado / cuentas.
+
+Motor adaptativo ML real (solo reglas).
+
+Generación de imagen del resultado (se puede agregar luego).
+
+14) Criterios de aceptación (MVP)
+
+Se puede crear un test (admin), publicarlo y verlo en GET /api/tests.
+
+Usuario completa test en ≤ 6 min y obtiene un perfil consistente con umbrales.
+
+Se genera un link shareable que muestra el perfil sin exponer PII.
+
+Dashboard admin muestra: starts, finishes, drop-off por pregunta y distribución de perfiles.
+
+Con 1.000 sesiones, DB crece de forma controlada (agregado diario + TTL de sesiones).

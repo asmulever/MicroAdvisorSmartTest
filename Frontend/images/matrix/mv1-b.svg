@@ -1,0 +1,12 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="200" height="140" viewBox="0 0 200 140" fill="none">
+  <rect width="200" height="140" rx="12" fill="#16171D" stroke="#2A2D36" />
+  <g stroke="#4A5568" stroke-width="6" stroke-linecap="round">
+    <path d="M50 40l14 14M64 40l-14 14"/>
+    <path d="M100 40l14 14M114 40l-14 14"/>
+    <path d="M150 40l14 14M164 40l-14 14"/>
+    <path d="M50 70l14 14M64 70l-14 14"/>
+    <path d="M100 70l14 14M114 70l-14 14"/>
+    <path d="M150 70l14 14M164 70l-14 14"/>
+    <path d="M50 100l14 14M64 100l-14 14"/>
+  </g>
+</svg>

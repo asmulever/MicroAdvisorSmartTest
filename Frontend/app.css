@@ -27,8 +27,10 @@ body {
 
 .app-shell {
   display: grid;
-  grid-template-columns: 280px 1fr;
+  grid-template-columns: 220px 1fr;
   min-height: 100vh;
+  transform: scale(0.88);
+  transform-origin: top left;
 }
 
 .sidebar {
@@ -128,23 +130,23 @@ body {
 }
 
 .main {
-  padding: 40px 46px 60px;
+  padding: 12px 18px 28px;
   display: flex;
   flex-direction: column;
-  gap: 36px;
+  gap: 24px;
 }
 
 
 .hero {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-  gap: 32px;
+  gap: 24px;
   align-items: center;
 }
 
 .hero-copy h1 {
   font-family: "Fraunces", serif;
-  font-size: clamp(2rem, 3vw, 3rem);
+  font-size: clamp(1.9rem, 2.6vw, 2.7rem);
   margin: 12px 0 12px;
 }
 
@@ -199,7 +201,7 @@ body {
   background: var(--panel);
   border: 1px solid var(--border);
   border-radius: 24px;
-  padding: 24px;
+  padding: 20px;
   box-shadow: var(--shadow);
   position: relative;
   overflow: hidden;
@@ -225,8 +227,8 @@ body {
 
 .orb {
   position: absolute;
-  width: 120px;
-  height: 120px;
+  width: 110px;
+  height: 110px;
   border-radius: 50%;
   background: radial-gradient(circle at 30% 30%, #6ee7ff, #6c7bff 55%, transparent 75%);
   top: 0;
@@ -234,16 +236,16 @@ body {
 }
 
 .orb.small {
-  width: 80px;
-  height: 80px;
+  width: 72px;
+  height: 72px;
   left: 90px;
   top: 40px;
   background: radial-gradient(circle at 30% 30%, #f9b27a, #6c7bff 70%, transparent 80%);
 }
 
 .orb.tiny {
-  width: 50px;
-  height: 50px;
+  width: 44px;
+  height: 44px;
   left: 170px;
   top: 15px;
   background: radial-gradient(circle at 30% 30%, #22d3a6, transparent 70%);
@@ -252,8 +254,16 @@ body {
 .hero-card-footer {
   display: flex;
   justify-content: space-between;
+  align-items: center;
   color: var(--muted);
   font-size: 0.85rem;
+  position: relative;
+}
+
+.hero-card-start {
+  position: absolute;
+  right: 12px;
+  bottom: 10px;
 }
 
 .pill {
@@ -440,11 +450,12 @@ body {
   border-radius: 18px;
   padding: 16px;
   display: grid;
-  gap: 10px;
+  gap: 12px;
 }
 
 .question-card .question-text {
   white-space: pre-line;
+  margin-bottom: 4px;
 }
 
 .question-meta {
@@ -456,7 +467,9 @@ body {
 
 .question-options {
   display: grid;
-  gap: 8px;
+  gap: 12px;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  align-items: stretch;
 }
 
 .question-option {
@@ -464,9 +477,100 @@ body {
   border: 1px solid rgba(108, 123, 255, 0.4);
   color: var(--text);
   border-radius: 12px;
-  padding: 10px 14px;
-  text-align: left;
+  padding: 12px 14px;
+  text-align: center;
   transition: 0.2s ease;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.visual-pattern {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px dashed rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  padding: 20px 16px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+
+.visual-pattern pre {
+  margin: 0;
+  white-space: pre;
+  font-family: "Space Grotesk", monospace;
+  color: var(--text);
+  line-height: 1.1;
+}
+
+.visual-pattern img {
+  max-width: 200px;
+  max-height: 160px;
+}
+
+.question-visual {
+  border-style: solid;
+  border-color: rgba(108, 123, 255, 0.5);
+  padding: 24px 18px;
+}
+
+.question-visual img {
+  max-width: 360px;
+  max-height: 260px;
+}
+
+.test-compact {
+  overflow: hidden;
+}
+
+.test-compact .app-shell {
+  transform: scale(0.9);
+  transform-origin: top center;
+}
+
+.test-compact .main {
+  padding-top: 10px;
+}
+
+.test-compact .test-screen {
+  padding: 12px;
+}
+
+.stroop-card {
+  background: var(--panel);
+  border: 1px solid var(--border);
+}
+
+.stroop-stimulus {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  min-height: 120px;
+  gap: 16px;
+}
+
+.stroop-word {
+  font-size: 48px;
+  font-weight: 700;
+}
+
+.stroop-shape {
+  width: 72px;
+  height: 72px;
+  border-radius: 16px;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+}
+
+.stroop-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.stroop-btn {
+  padding: 10px;
+  font-weight: 600;
 }
 
 .question-option.active {
@@ -481,6 +585,7 @@ body {
 .hidden {
   display: none;
 }
+
 .analytics .section-header {
   display: flex;
   justify-content: space-between;

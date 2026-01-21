@@ -2,8 +2,7 @@ const API = {
   tests: '/api/tests',
   summary: '/api/analytics/summary',
   funnel: '/api/analytics/funnel',
-  profiles: '/api/analytics/profiles',
-  dropoff: '/api/analytics/dropoff'
+  profiles: '/api/analytics/profiles'
 };
 
 const IQ_API = {
@@ -115,12 +114,11 @@ const setActiveNav = () => {
   });
 };
 
-const initCharts = (funnelData, profileData, dropData) => {
+const initCharts = (funnelData, profileData) => {
   const funnelCtx = document.getElementById('funnelChart');
   const profileCtx = document.getElementById('profileChart');
-  const dropCtx = document.getElementById('dropChart');
 
-  if (!funnelCtx || !profileCtx || !dropCtx) {
+  if (!funnelCtx || !profileCtx) {
     return;
   }
 
@@ -162,31 +160,6 @@ const initCharts = (funnelData, profileData, dropData) => {
     options: {
       plugins: {
         legend: { position: 'bottom', labels: { color: '#d5e4ff' } }
-      }
-    }
-  });
-
-  const dropLabels = dropData?.labels?.length ? dropData.labels : ['Q1'];
-  const dropValues = dropData?.values?.length ? dropData.values : [0];
-
-  new Chart(dropCtx, {
-    type: 'line',
-    data: {
-      labels: dropLabels,
-      datasets: [{
-        label: 'Abandono',
-        data: dropValues,
-        borderColor: '#ff8aa1',
-        backgroundColor: 'rgba(255,138,161,0.2)',
-        tension: 0.4,
-        fill: true
-      }]
-    },
-    options: {
-      plugins: { legend: { labels: { color: '#d5e4ff' } } },
-      scales: {
-        y: { grid: { color: 'rgba(255,255,255,0.08)' }, ticks: { color: '#d5e4ff' } },
-        x: { grid: { display: false }, ticks: { color: '#d5e4ff' } }
       }
     }
   });
@@ -252,7 +225,7 @@ const bindStartButton = () => {
   const btn = document.getElementById('start-test-btn');
   if (!btn) return;
   btn.addEventListener('click', () => {
-    window.location.href = '/test';
+    window.location.href = '/test-mixed';
   });
 };
 
@@ -263,159 +236,305 @@ const getBlockSize = () => {
   return 3;
 };
 
-const renderBlock = (block, state) => {
+const renderPattern = (pattern, variant = 'option') => {
+  const wrap = document.createElement('div');
+  wrap.className = variant === 'question' ? 'visual-pattern question-visual' : 'visual-pattern';
+  if (pattern && pattern.src) {
+    const img = document.createElement('img');
+    img.src = pattern.src;
+    img.alt = pattern.alt || 'pattern';
+    wrap.appendChild(img);
+  } else {
+    const pre = document.createElement('pre');
+    pre.textContent = Array.isArray(pattern) ? pattern.join('\n') : String(pattern || '');
+    wrap.appendChild(pre);
+  }
+  return wrap;
+};
+
+const renderQuestion = (item, state, onAnswer) => {
   const container = document.getElementById('test-block');
-  const nextBtn = document.getElementById('test-next');
-  if (!container || !nextBtn) return;
+  const progressEl = document.getElementById('test-progress');
+  const timerEl = document.getElementById('test-timer');
+  if (!container || !progressEl || !timerEl) return;
 
+  // limpiar estado previo
+  if (state.activeTimer) clearInterval(state.activeTimer);
   container.innerHTML = '';
-  state.answers = {};
-  state.timeouts = {};
-  let resolved = 0;
+  state.currentAnswer = null;
+  state.questionDone = false;
 
-  const updateNext = () => {
-    nextBtn.disabled = resolved < block.length;
-  };
+  const questionNumber = state.answered + 1;
+  progressEl.textContent = `Pregunta ${questionNumber} / ${state.total}`;
+  state.questionStart = performance.now();
+  state.answerChanges = 0;
 
-  block.forEach((item, idx) => {
-    const card = document.createElement('div');
-    card.className = 'question-card';
-    card.dataset.itemId = item.item_id;
+  const card = document.createElement('div');
+  card.className = 'question-card';
+  card.dataset.itemId = item.item_id;
 
-    const meta = document.createElement('div');
-    meta.className = 'question-meta';
-    meta.innerHTML = `<span>Pregunta ${state.answerCount + idx + 1}</span><span>Tiempo: <strong id=\"timer-${item.item_id}\"></strong></span>`;
+  const meta = document.createElement('div');
+  meta.className = 'question-meta';
+  meta.innerHTML = `<span>Pregunta ${questionNumber}</span>`;
 
-    const prompt = document.createElement('div');
-    prompt.className = 'question-text';
-    prompt.textContent = item.prompt;
+  const prompt = document.createElement('div');
+  prompt.className = 'question-text';
+  prompt.textContent = item.prompt;
 
-    const options = document.createElement('div');
-    options.className = 'question-options';
-    item.options.forEach((opt) => {
-      const btn = document.createElement('button');
-      btn.className = 'question-option';
-      btn.textContent = opt;
-      btn.addEventListener('click', () => {
-        if (state.answers[item.item_id]) return;
-        state.answers[item.item_id] = { answer: opt, timed_out: false };
-        btn.classList.add('active');
-        options.querySelectorAll('button').forEach((b) => (b.disabled = true));
-        clearInterval(state.timeouts[item.item_id]);
-        resolved += 1;
-        updateNext();
-      });
-      options.appendChild(btn);
+  const options = document.createElement('div');
+  options.className = 'question-options';
+  item.options.forEach((opt) => {
+    const value = typeof opt === 'string' ? opt : opt.value ?? opt.label ?? JSON.stringify(opt);
+    const label = typeof opt === 'string' ? opt : opt.label ?? opt.value ?? '';
+    const pattern = typeof opt === 'object' ? opt.pattern : null;
+    const image = typeof opt === 'object' ? opt.image : null;
+
+    const btn = document.createElement('button');
+    btn.className = 'question-option';
+    if (image) {
+      btn.appendChild(renderPattern({ src: image, alt: label || 'option' }, 'option'));
+    } else if (pattern) {
+      btn.appendChild(renderPattern(pattern, 'option'));
+    } else {
+      btn.textContent = label;
+    }
+    btn.addEventListener('click', () => {
+      if (state.questionDone) return;
+      const elapsedMs = performance.now() - state.questionStart;
+      const seconds = Math.max(0.1, Math.round(elapsedMs / 1000));
+      state.currentAnswer = { item_id: item.item_id, answer: value, timed_out: false, seconds, changes: state.answerChanges };
+      btn.classList.add('active');
+      options.querySelectorAll('button').forEach((b) => (b.disabled = true));
+      if (state.activeTimer) clearInterval(state.activeTimer);
+      state.questionDone = true;
+      onAnswer(state.currentAnswer);
     });
-
-    card.appendChild(meta);
-    card.appendChild(prompt);
-    card.appendChild(options);
-    container.appendChild(card);
-
-    const timerEl = document.getElementById(`timer-${item.item_id}`);
-    let remaining = item.time_limit;
-    if (timerEl) timerEl.textContent = `${remaining}s`;
-
-    state.timeouts[item.item_id] = setInterval(() => {
-      remaining -= 1;
-      if (timerEl) timerEl.textContent = `${remaining}s`;
-      if (remaining <= 0) {
-        clearInterval(state.timeouts[item.item_id]);
-        if (!state.answers[item.item_id]) {
-          state.answers[item.item_id] = { answer: null, timed_out: true };
-          options.querySelectorAll('button').forEach((b) => (b.disabled = true));
-          resolved += 1;
-          updateNext();
-        }
-      }
-    }, 1000);
+    options.appendChild(btn);
   });
 
-  updateNext();
+  card.appendChild(meta);
+  if (item.visual && item.visual.base) {
+    card.appendChild(renderPattern(item.visual.base, 'question'));
+  }
+  card.appendChild(prompt);
+  card.appendChild(options);
+  container.appendChild(card);
+
+  const perQuestionTimer = document.getElementById(`timer-${item.item_id}`);
+  let remaining = item.time_limit;
+  const updateTimerLabel = () => {
+    if (perQuestionTimer) perQuestionTimer.textContent = `${remaining}s`;
+    timerEl.textContent = `Tiempo restante: ${remaining}s`;
+  };
+  updateTimerLabel();
+
+  state.activeTimer = setInterval(() => {
+    remaining -= 1;
+    updateTimerLabel();
+      if (remaining <= 0) {
+        clearInterval(state.activeTimer);
+        if (state.questionDone) return;
+        state.currentAnswer = {
+          item_id: item.item_id,
+          answer: null,
+          timed_out: true,
+          seconds: item.time_limit || 0,
+          changes: state.answerChanges,
+        };
+        options.querySelectorAll('button').forEach((b) => (b.disabled = true));
+        state.questionDone = true;
+        onAnswer(state.currentAnswer);
+      }
+  }, 1000);
 };
 
 const startTestFlow = async () => {
   const screen = document.getElementById('test-screen');
   const complete = document.getElementById('test-complete');
-  const progressEl = document.getElementById('test-progress');
-  const timerEl = document.getElementById('test-timer');
-  const nextBtn = document.getElementById('test-next');
-  if (!screen || !complete || !nextBtn) return;
+  if (!screen || !complete) return;
 
   const blockSize = getBlockSize();
   const startData = await fetchJson(`${IQ_API.start}?block_size=${blockSize}`, {
     method: 'POST'
   });
-  if (!startData) return;
+  if (!startData || !startData.block) return;
 
   const state = {
     sessionId: startData.session_id,
     total: startData.config.n_items,
-    answerCount: 0,
-    answers: {},
-    timeouts: {}
+    answered: 0,
+    currentBlock: startData.block,
+    blockAnswers: [],
+    currentIndex: 0,
+    currentAnswer: null,
+    activeTimer: null,
+    questionDone: false,
+    questionStart: performance.now(),
+    answerChanges: 0
   };
 
   localStorage.setItem('iq_session_id', state.sessionId);
-  timerEl.textContent = `Bloques de ${blockSize}`;
 
-  const updateProgress = () => {
-    progressEl.textContent = `${state.answerCount} de ${state.total}`;
+  const showCurrentQuestion = () => {
+    const current = state.currentBlock[state.currentIndex];
+    if (!current) return;
+    renderQuestion(current, state, handleAnswer);
   };
 
-  const handleNext = async () => {
-    nextBtn.disabled = true;
-    const answers = Object.keys(state.answers).map((itemId) => ({
-      item_id: itemId,
-      answer: state.answers[itemId].answer,
-      timed_out: state.answers[itemId].timed_out
-    }));
-    state.answerCount += answers.length;
-    updateProgress();
-    const payload = { session_id: state.sessionId, answers };
+  const sendBlockAndLoadNext = async () => {
+    const payload = { session_id: state.sessionId, answers: state.blockAnswers };
     const resp = await fetchJson(IQ_API.answer, {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify(payload)
     });
-    if (!resp) return;
-    if (resp.done) {
-      const finish = await fetchJson(IQ_API.finish, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ session_id: state.sessionId })
-      });
-      saveLastResult(finish);
-      screen.classList.add('hidden');
-      complete.classList.remove('hidden');
-      return;
-    }
-    renderBlock(resp.block, state);
+    if (!resp) return null;
+    return resp;
   };
 
-  nextBtn.addEventListener('click', handleNext);
-  updateProgress();
-  if (!startData.block || startData.block.length === 0) {
+  const finalizeTest = async () => {
+    const finish = await fetchJson(IQ_API.finish, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: state.sessionId })
+    });
+    saveLastResult(finish);
+    screen.classList.add('hidden');
+    complete.classList.remove('hidden');
+  };
+
+  const handleAnswer = async (answer) => {
+    state.blockAnswers.push(answer);
+    state.answered += 1;
+
+    if (state.currentIndex < state.currentBlock.length - 1) {
+      state.currentIndex += 1;
+      showCurrentQuestion();
+      return;
+    }
+
+    const resp = await sendBlockAndLoadNext();
+    if (!resp) return;
+    if (resp.done) {
+      await finalizeTest();
+      return;
+    }
+
+    state.currentBlock = resp.block || [];
+    state.blockAnswers = [];
+    state.currentIndex = 0;
+    showCurrentQuestion();
+  };
+
+  if (!startData.block.length) return;
+  showCurrentQuestion();
+};
+
+// Test combinado IQ + Stroop
+const startMixedFlow = async () => {
+  const screen = document.getElementById('mixed-screen');
+  const complete = document.getElementById('mixed-complete');
+  if (!screen || !complete) return;
+  const startData = await fetchJson('/api/mixed/start', { method: 'POST' });
+  if (!startData) return;
+  const state = {
+    sessionId: startData.session_id,
+    current: startData.item,
+    total: (startData.total || 16),
+    answered: 0
+  };
+  renderMixedItem(state);
+};
+
+const renderMixedItem = (state) => {
+  const container = document.getElementById('mixed-block');
+  const progress = document.getElementById('mixed-progress');
+  if (!container || !progress || !state.current) return;
+  container.innerHTML = '';
+  progress.textContent = `Item ${state.answered + 1}`;
+  if (state.current.kind === 'iq') {
+    const card = document.createElement('div');
+    card.className = 'question-card';
+    const prompt = document.createElement('div');
+    prompt.className = 'question-text';
+    prompt.textContent = state.current.payload.prompt;
+    const opts = document.createElement('div');
+    opts.className = 'question-options';
+    state.current.payload.options.forEach((opt) => {
+      const btn = document.createElement('button');
+      btn.className = 'question-option';
+      btn.textContent = opt;
+      btn.onclick = () => answerMixed(state, opt);
+      opts.appendChild(btn);
+    });
+    card.appendChild(prompt);
+    card.appendChild(opts);
+    container.appendChild(card);
+  } else {
+    const card = document.createElement('div');
+    card.className = 'question-card';
+    const stim = document.createElement('div');
+    stim.className = 'stroop-stimulus';
+    const inkColor = STROOP_COLOR_MAP[state.current.payload.ink] || state.current.payload.ink;
+    stim.innerHTML = `
+      <div class="stroop-shape" style="background:${inkColor};"></div>
+      <div class="stroop-word" style="color:${inkColor};">${state.current.payload.word}</div>
+    `;
+    const opts = document.createElement('div');
+    opts.className = 'question-options';
+    STROOP_COLORS.forEach((c) => {
+      const btn = document.createElement('button');
+      btn.className = 'question-option';
+      btn.style.color = STROOP_COLOR_MAP[c] || '#e2e8f0';
+      btn.textContent = c.toUpperCase();
+      btn.onclick = () => answerMixed(state, c);
+      opts.appendChild(btn);
+    });
+    card.appendChild(stim);
+    card.appendChild(opts);
+    container.appendChild(card);
+  }
+};
+
+const answerMixed = async (state, answer) => {
+  state.answered += 1;
+  const resp = await fetchJson('/api/mixed/answer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: state.sessionId, answer })
+  });
+  if (!resp) return;
+  if (resp.finished) {
+    const finish = await fetchJson('/api/mixed/finish', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ session_id: state.sessionId })
+    });
+    if (!finish) return;
+    document.getElementById('mixed-score').textContent = `Score combinado: ${finish.score} (IQ ${finish.iq_pct}%, Stroop ${finish.stroop_pct}%)`;
+    document.getElementById('mixed-screen').classList.add('hidden');
+    document.getElementById('mixed-complete').classList.remove('hidden');
     return;
   }
-  renderBlock(startData.block, state);
+  if (resp.item) {
+    state.current = resp.item;
+    renderMixedItem(state);
+  }
 };
 
 const loadData = async () => {
-  const [tests, summary, funnel, profiles, dropoff] = await Promise.all([
+  const [tests, summary, funnel, profiles] = await Promise.all([
     fetchJson(API.tests),
     fetchJson(API.summary),
     fetchJson(API.funnel),
-    fetchJson(API.profiles),
-    fetchJson(API.dropoff)
+    fetchJson(API.profiles)
   ]);
 
   const testsList = tests?.tests || [];
   updateSummary(summary);
   updateHero(testsList[0]);
   updateTestsTable(testsList);
-  initCharts(funnel, profiles, dropoff);
+  initCharts(funnel, profiles);
 };
 
 document.addEventListener('DOMContentLoaded', () => {
@@ -430,7 +549,113 @@ document.addEventListener('DOMContentLoaded', () => {
     updateLastAnalytics(loadLastResult());
   }
   if (path === '/test') {
+    applyCompactLayout();
     startTestFlow();
+  }
+  if (path === '/stroop') {
+    startStroopFlow();
+  }
+  if (path === '/test-mixed') {
+    startMixedFlow();
   }
   loadData();
 });
+
+const applyCompactLayout = () => {
+  const toggle = () => {
+    if (window.innerHeight < 900) {
+      document.body.classList.add('test-compact');
+    } else {
+      document.body.classList.remove('test-compact');
+    }
+  };
+  toggle();
+  window.addEventListener('resize', toggle);
+};
+
+// Stroop/WCST híbrido
+const STROOP_COLORS = ['rojo', 'verde', 'azul', 'amarillo'];
+const STROOP_COLOR_MAP = {
+  rojo: '#ef4444',
+  verde: '#22c55e',
+  azul: '#3b82f6',
+  amarillo: '#eab308'
+};
+
+const startStroopFlow = async () => {
+  const screen = document.getElementById('stroop-screen');
+  const complete = document.getElementById('stroop-complete');
+  if (!screen || !complete) return;
+  const startResp = await fetchJson('/api/stroop/start', { method: 'POST' });
+  if (!startResp) return;
+  const state = {
+    sessionId: startResp.session_id,
+    currentTrial: startResp.trial,
+    trialIndex: 0,
+    feedbackEl: document.getElementById('stroop-feedback'),
+    progressEl: document.getElementById('stroop-progress'),
+    stimEl: document.getElementById('stroop-stimulus'),
+    optionsEl: document.getElementById('stroop-options'),
+    ruleHintEl: document.getElementById('stroop-rule-hint'),
+  };
+  renderStroopTrial(state);
+  const finishBtn = document.getElementById('stroop-finish');
+  finishBtn?.addEventListener('click', () => finishStroop(state, screen, complete));
+};
+
+const renderStroopTrial = (state) => {
+  if (!state.currentTrial) return;
+  state.trialIndex += 1;
+  state.progressEl.textContent = `Trial ${state.trialIndex}`;
+  state.ruleHintEl.textContent = 'Elegí el color correcto según la regla activa.';
+  state.feedbackEl.textContent = 'En curso';
+  const { word, ink } = state.currentTrial;
+  const inkColor = STROOP_COLOR_MAP[ink] || ink;
+  state.stimEl.innerHTML = `
+    <div class="stroop-shape" style="background:${inkColor};"></div>
+    <div class="stroop-word" style="color:${inkColor};">${word}</div>
+  `;
+  state.optionsEl.innerHTML = '';
+  state.trialStart = performance.now();
+  STROOP_COLORS.forEach((color) => {
+    const btn = document.createElement('button');
+    btn.className = 'btn btn-outline-light stroop-btn';
+    btn.textContent = color.toUpperCase();
+    btn.style.borderColor = STROOP_COLOR_MAP[color] || '#64748b';
+    btn.style.color = STROOP_COLOR_MAP[color] || '#e2e8f0';
+    btn.addEventListener('click', () => handleStroopAnswer(state, color));
+    state.optionsEl.appendChild(btn);
+  });
+};
+
+const handleStroopAnswer = async (state, color) => {
+  const rt_ms = Math.max(1, Math.round(performance.now() - state.trialStart));
+  const payload = { session_id: state.sessionId, answer: color, rt_ms };
+  const resp = await fetchJson('/api/stroop/answer', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(payload)
+  });
+  if (!resp) return;
+  state.feedbackEl.textContent = resp.correct ? '✅ Correcto' : '❌ Incorrecto';
+  if (resp.finished) {
+    return finishStroop(state, document.getElementById('stroop-screen'), document.getElementById('stroop-complete'));
+  }
+  if (resp.next_trial) {
+    state.currentTrial = resp.next_trial;
+    setTimeout(() => renderStroopTrial(state), 500);
+  }
+};
+
+const finishStroop = async (state, screen, complete) => {
+  const resp = await fetchJson('/api/stroop/finish', {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({ session_id: state.sessionId })
+  });
+  if (!resp) return;
+  screen.classList.add('hidden');
+  complete.classList.remove('hidden');
+  document.getElementById('stroop-score').textContent = `Score: ${resp.score}`;
+  document.getElementById('stroop-profile').textContent = resp.profile;
+};

@@ -1,0 +1,15 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="280" height="180" viewBox="0 0 280 180" fill="none">
+  <rect width="280" height="180" rx="16" fill="#16171D" stroke="#2A2D36" />
+  <g stroke="#4A5568" stroke-width="6" stroke-linecap="round">
+    <path d="M60 50l20 20M80 50l-20 20"/>
+    <path d="M140 50l20 20M160 50l-20 20"/>
+    <path d="M220 50l20 20M240 50l-20 20"/>
+    <path d="M60 110l20 20M80 110l-20 20"/>
+    <path d="M140 110l20 20M160 110l-20 20"/>
+    <path d="M220 110l20 20M240 110l-20 20"/>
+    <path d="M60 170l20 20M80 170l-20 20"/>
+    <path d="M140 170l20 20M160 170l-20 20"/>
+  </g>
+  <rect x="200" y="140" width="60" height="60" fill="#0F172A" stroke="#3B82F6" stroke-width="6" rx="8"/>
+  <text x="230" y="180" text-anchor="middle" font-size="42" fill="#3B82F6" font-family="Arial" font-weight="700">?</text>
+</svg>

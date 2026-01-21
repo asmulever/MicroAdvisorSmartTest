@@ -1,0 +1,14 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="280" height="180" viewBox="0 0 280 180" fill="none">
+  <rect width="280" height="180" rx="16" fill="#16171D" stroke="#2A2D36" />
+  <g stroke="#4A5568" stroke-width="4" stroke-linecap="round">
+    <path d="M60 50 l20 -20 M80 50 l-20 -20"/>
+    <path d="M140 50 l20 -20 M160 50 l-20 -20"/>
+    <path d="M220 50 l20 -20 M240 50 l-20 -20"/>
+    <path d="M100 90 l20 -20 M120 90 l-20 -20"/>
+    <path d="M180 90 l20 -20 M200 90 l-20 -20"/>
+    <path d="M60 130 l20 -20 M80 130 l-20 -20"/>
+    <path d="M140 130 l20 -20 M160 130 l-20 -20"/>
+  </g>
+  <rect x="200" y="130" width="60" height="60" fill="#0F172A" stroke="#3B82F6" stroke-width="6" rx="8"/>
+  <text x="230" y="170" text-anchor="middle" font-size="42" fill="#3B82F6" font-family="Arial" font-weight="700">?</text>
+</svg>
